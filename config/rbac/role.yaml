@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - appo11y.grafana.com
+  resources:
+  - instrumenters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - appo11y.grafana.com
+  resources:
+  - instrumenters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - appo11y.grafana.com
+  resources:
+  - instrumenters/status
+  verbs:
+  - get
+  - patch
+  - update

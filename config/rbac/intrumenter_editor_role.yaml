@@ -1,0 +1,31 @@
+# permissions for end users to edit instrumenters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: intrumenter-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ebpf-autoinstrument-operator
+    app.kubernetes.io/part-of: ebpf-autoinstrument-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: intrumenter-editor-role
+rules:
+- apiGroups:
+  - appo11y.grafana.com
+  resources:
+  - instrumenters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - appo11y.grafana.com
+  resources:
+  - instrumenters/status
+  verbs:
+  - get
