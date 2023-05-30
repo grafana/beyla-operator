@@ -1,12 +1,12 @@
 apiVersion: appo11y.grafana.com/v1alpha1
-kind: Intrumenter
+kind: Instrumenter
 metadata:
   labels:
-    app.kubernetes.io/name: intrumenter
-    app.kubernetes.io/instance: intrumenter-sample
+    app.kubernetes.io/name: instrumenter
+    app.kubernetes.io/instance: instrumenter-sample
     app.kubernetes.io/part-of: ebpf-autoinstrument-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: ebpf-autoinstrument-operator
-  name: intrumenter-sample
+  name: instrumenter-sample
 spec:
   # TODO(user): Add fields here

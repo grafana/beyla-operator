@@ -4,12 +4,12 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: intrumenter-editor-role
+    app.kubernetes.io/instance: instrumenter-editor-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: ebpf-autoinstrument-operator
     app.kubernetes.io/part-of: ebpf-autoinstrument-operator
     app.kubernetes.io/managed-by: kustomize
-  name: intrumenter-editor-role
+  name: instrumenter-editor-role
 rules:
 - apiGroups:
   - appo11y.grafana.com

@@ -27,8 +27,8 @@ import (
 	appo11yv1alpha1 "github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1"
 )
 
-// IntrumenterReconciler reconciles a Intrumenter object
-type IntrumenterReconciler struct {
+// InstrumenterReconciler reconciles a Instrumenter object
+type InstrumenterReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
@@ -40,23 +40,26 @@ type IntrumenterReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the Intrumenter object against the actual cluster state, and then
+// the Instrumenter object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
-func (r *IntrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+func (r *InstrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	logger.Info("reconcile loop", "request", req.String())
+
+
+	r.Get(ctx, req.NamespacedName, nil)
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *IntrumenterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *InstrumenterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appo11yv1alpha1.Intrumenter{}).
+		For(&appo11yv1alpha1.Instrumenter{}).
 		Complete(r)
 }

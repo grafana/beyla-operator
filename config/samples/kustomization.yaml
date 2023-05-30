@@ -1,4 +1,4 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- appo11y_v1alpha1_intrumenter.yaml
+- appo11y_v1alpha1_instrumenter.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

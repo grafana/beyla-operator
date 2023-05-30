@@ -9,16 +9,16 @@ metadata:
 spec:
   group: appo11y.grafana.com
   names:
-    kind: Intrumenter
-    listKind: IntrumenterList
+    kind: Instrumenter
+    listKind: InstrumenterList
     plural: instrumenters
-    singular: intrumenter
+    singular: instrumenter
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Intrumenter is the Schema for the instrumenters API
+        description: Instrumenter is the Schema for the instrumenters API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,7 +33,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: IntrumenterSpec defines the desired state of Intrumenter
+            description: InstrumenterSpec defines the desired state of Instrumenter
             properties:
               selector:
                 description: Selector overrides the selection of Pods and executables
@@ -51,7 +51,7 @@ spec:
                 type: object
             type: object
           status:
-            description: IntrumenterStatus defines the observed state of Intrumenter
+            description: InstrumenterStatus defines the observed state of Instrumenter
             type: object
         type: object
     served: true

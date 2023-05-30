@@ -20,15 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	labelOpenPort = "autoinstrument.open.port"
-)
-
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// IntrumenterSpec defines the desired state of Intrumenter
-type IntrumenterSpec struct {
+// InstrumenterSpec defines the desired state of Instrumenter
+type InstrumenterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -46,8 +42,8 @@ type Selector struct {
 	PortLabel string `json:"portLabel"`
 }
 
-// IntrumenterStatus defines the observed state of Intrumenter
-type IntrumenterStatus struct {
+// InstrumenterStatus defines the observed state of Instrumenter
+type InstrumenterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -57,24 +53,24 @@ type IntrumenterStatus struct {
 //+kubebuilder:resource:path=instrumenters
 //+kubebuilder:resource:scope=Namespaced
 
-// Intrumenter is the Schema for the instrumenters API
-type Intrumenter struct {
+// Instrumenter is the Schema for the instrumenters API
+type Instrumenter struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   IntrumenterSpec   `json:"spec,omitempty"`
-	Status IntrumenterStatus `json:"status,omitempty"`
+	Spec   InstrumenterSpec   `json:"spec,omitempty"`
+	Status InstrumenterStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// IntrumenterList contains a list of Intrumenter
-type IntrumenterList struct {
+// InstrumenterList contains a list of Instrumenter
+type InstrumenterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Intrumenter `json:"items"`
+	Items           []Instrumenter `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Intrumenter{}, &IntrumenterList{})
+	SchemeBuilder.Register(&Instrumenter{}, &InstrumenterList{})
 }

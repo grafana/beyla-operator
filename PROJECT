@@ -17,7 +17,7 @@ resources:
   controller: true
   domain: grafana.com
   group: appo11y
-  kind: Intrumenter
+  kind: Instrumenter
   path: github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1
   plural: instrumenters
   version: v1alpha1
