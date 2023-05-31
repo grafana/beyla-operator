@@ -51,7 +51,6 @@ func (r *InstrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	logger.Info("reconcile loop", "request", req.String())
 
-
 	r.Get(ctx, req.NamespacedName, nil)
 
 	return ctrl.Result{}, nil

@@ -21,4 +21,7 @@ resources:
   path: github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1
   plural: instrumenters
   version: v1alpha1
+  webhooks:
+    defaulting: true
+    webhookVersion: v1
 version: "3"
