@@ -10,9 +10,9 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-appo11y-grafana-com-v1-pod
+      path: /mutate--v1-pod
   failurePolicy: Fail
-  name: mpod.kb.io
+  name: minstrumenter.kb.io
   rules:
   - apiGroups:
     - ""

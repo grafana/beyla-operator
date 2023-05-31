@@ -96,7 +96,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Instrumenter")
 		os.Exit(1)
 	}
-	if err = (&appo11yv1alpha1.Instrumenter{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = appo11yv1alpha1.SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Instrumenter")
 		os.Exit(1)
 	}

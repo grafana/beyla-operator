@@ -19,6 +19,8 @@ package controllers
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +38,7 @@ type InstrumenterReconciler struct {
 //+kubebuilder:rbac:groups=appo11y.grafana.com,resources=instrumenters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=appo11y.grafana.com,resources=instrumenters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=appo11y.grafana.com,resources=instrumenters/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -60,5 +63,6 @@ func (r *InstrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *InstrumenterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appo11yv1alpha1.Instrumenter{}).
+		Owns(&corev1.Pod{}).
 		Complete(r)
 }
