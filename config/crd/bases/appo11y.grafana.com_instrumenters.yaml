@@ -35,6 +35,8 @@ spec:
             description: InstrumenterSpec defines the desired state of Instrumenter
             properties:
               selector:
+                default:
+                  portLabel: autoinstrument.open.port
                 description: Selector overrides the selection of Pods and executables
                   to instrument
                 properties:
@@ -45,8 +47,6 @@ spec:
                       port it opens. Any pod containing the label would be selected
                       for instrumentation
                     type: string
-                required:
-                - portLabel
                 type: object
             type: object
           status:

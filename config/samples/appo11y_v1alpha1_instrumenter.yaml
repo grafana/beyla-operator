@@ -9,4 +9,5 @@ metadata:
     app.kubernetes.io/created-by: ebpf-autoinstrument-operator
   name: instrumenter-sample
 spec:
-  # TODO(user): Add fields here
+  selector:
+    portLabel: autoinstrument.open.port

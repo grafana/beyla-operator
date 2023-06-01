@@ -25,11 +25,10 @@ import (
 
 // InstrumenterSpec defines the desired state of Instrumenter
 type InstrumenterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 
 	// Selector overrides the selection of Pods and executables to instrument
 	// +optional
+	// +kubebuilder:default:={portLabel:"autoinstrument.open.port"}
 	Selector Selector `json:"selector"`
 }
 
@@ -38,6 +37,7 @@ type Selector struct {
 	// PortLabel specifies which Pod label would specify which executable needs to be instrumented,
 	// according to the port it opens.
 	// Any pod containing the label would be selected for instrumentation
+	// +optional
 	// +kubebuilder:default:="autoinstrument.open.port"
 	PortLabel string `json:"portLabel"`
 }
