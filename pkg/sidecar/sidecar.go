@@ -11,7 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-// TODO: user-provided
+// TODO: user-overridable
 const (
 	instrumenterName            = "grafana-ebpf-autoinstrumenter"
 	instrumenterImage           = "grafana/ebpf-autoinstrument:latest"
