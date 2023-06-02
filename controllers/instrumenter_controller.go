@@ -20,18 +20,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper/lvl"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-
 	corev1 "k8s.io/api/core/v1"
-
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	appo11yv1alpha1 "github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1"
+	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper/lvl"
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
 )
 
@@ -118,6 +115,16 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 
 			if err := r.Delete(ctx, pod); err != nil {
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
+			}
+			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
+			// needs to be created again
+			if len(pod.OwnerReferences) == 0 {
+				pod.ResourceVersion = ""
+				pod.UID = ""
+				pod.Status = corev1.PodStatus{}
+				if err := r.Create(ctx, pod); err != nil {
+					return ctrl.Result{}, fmt.Errorf("can't recreate Pod %s/%s: %w", pod.Namespace, pod.Name, err)
+				}
 			}
 		}
 	}
