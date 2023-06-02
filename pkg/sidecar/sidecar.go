@@ -1,8 +1,7 @@
 package sidecar
 
 import (
-	"fmt"
-	"strconv"
+	"reflect"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -16,36 +15,72 @@ const (
 	instrumenterName            = "grafana-ebpf-autoinstrumenter"
 	instrumenterImage           = "grafana/ebpf-autoinstrument:latest"
 	instrumenterImagePullPolicy = "Always"
+
+	instrumentedLabel = "grafana.com/instrumented-by"
 )
 
 var log = logf.Log.WithName("sidecar-instrumenter")
 
 type InstrumentQuery struct {
-	PortLabel string
+	InstrumenterName string
+	PortLabel        string
 }
 
-func AddInstrumenter(iq InstrumentQuery, dst *v1.Pod) (bool, error) {
-	// TODO: Add OWNER to Pod
-	// TODO: return if it must be updated
-
-	sidecar, err := buildSidecar(&iq, dst)
-	if err != nil {
-		return false, fmt.Errorf("building Pod sidecar: %w", err)
+// NeedsInstrumentation returns whether the given pod requires instrumentation,
+// and a container with the instrumenter, in case of requiring it.
+func NeedsInstrumentation(iq InstrumentQuery, dst *v1.Pod) (*v1.Container, bool) {
+	if dst.Labels == nil {
+		return nil, false
 	}
-
-	// TODO: add it only if it is not yet in the pod or it must change
-
-	dst.Spec.Containers = append(dst.Spec.Containers, *sidecar)
-	return true, nil
+	// if the Pod does not have the port selection label,
+	// or it's being already instrumented by another Instrumenter
+	if dst.Labels[iq.PortLabel] == "" ||
+		(dst.Labels[instrumentedLabel] != "" && dst.Labels[instrumentedLabel] != iq.InstrumenterName) {
+		return nil, false
+	}
+	expected := buildSidecar(&iq, dst)
+	actual, ok := findByName(dst.Spec.Containers)
+	if !ok {
+		return expected, true
+	}
+	if reflect.DeepEqual(expected, actual) {
+		return nil, false
+	}
+	return expected, true
 }
 
-func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) (*v1.Container, error) {
+// labelInstrumented annotates a pod as already being instrumented
+func labelInstrumented(instrumenterName string, dst *v1.Pod) {
+	if dst.ObjectMeta.Labels == nil {
+		dst.ObjectMeta.Labels = map[string]string{}
+	}
+	dst.ObjectMeta.Labels[instrumentedLabel] = instrumenterName
+}
+
+// InstrumentIfRequired instruments, if needed, the destination pod, and returns whether it has been instrumented
+func InstrumentIfRequired(iq InstrumentQuery, dst *v1.Pod) bool {
+	sidecar, ok := NeedsInstrumentation(iq, dst)
+	if !ok {
+		return false
+	}
+	AddInstrumenter(iq.InstrumenterName, sidecar, dst)
+	return true
+}
+
+func AddInstrumenter(instrumenterName string, sidecar *v1.Container, dst *v1.Pod) {
+	// it might happen that the sidecar container needs to be replaced or added
+	current, ok := findByName(dst.Spec.Containers)
+	if ok {
+		*current = *sidecar
+	} else {
+		dst.Spec.Containers = append(dst.Spec.Containers, *sidecar)
+	}
+	labelInstrumented(instrumenterName, dst)
+}
+
+func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) *v1.Container {
 	lbls := dst.ObjectMeta.Labels
 	log.Info("labels", "labels", lbls, "query", iq)
-	port, err := strconv.Atoi(lbls[iq.PortLabel])
-	if err != nil {
-		return nil, fmt.Errorf("can't convert %s value %q to integer: %w", iq.PortLabel, port, err)
-	}
 	// TODO: do not make pod failing if sidecar fails, just report it in the Instrumenter status
 	sidecar := v1.Container{
 		Name:            instrumenterName,
@@ -68,5 +103,14 @@ func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) (*v1.Container, error) {
 		}},
 	}
 	// TODO: add prometheus and scrape labels
-	return &sidecar, nil
+	return &sidecar
+}
+
+func findByName(containers []v1.Container) (*v1.Container, bool) {
+	for c := range containers {
+		if containers[c].Name == instrumenterName {
+			return &containers[c], true
+		}
+	}
+	return nil, false
 }
