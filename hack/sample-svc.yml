@@ -19,6 +19,7 @@ spec:
         autoinstrument.open.port: "8080"
     spec:
       # required so the sidecar instrumenter can access the service process
+      # TODO: add by controller
       shareProcessNamespace: true
       containers:
         - name: goblog

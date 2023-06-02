@@ -4,6 +4,13 @@ import (
 	"fmt"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+
+	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
+	"github.com/mariomac/gostream/stream"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1"
@@ -11,6 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -21,36 +29,38 @@ const (
 )
 
 var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
-
+	singleTestPodTemplate := v1.Pod{
+		ObjectMeta: controllerruntime.ObjectMeta{
+			Name:      "instrumentable-pod",
+			Namespace: defaultNS,
+			Labels: map[string]string{
+				"autoinstrument.open.port": "8080",
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:  "my-pod-container",
+				Image: "foo-image",
+			}},
+		},
+	}
+	instrumenterTemplate := v1alpha1.Instrumenter{
+		ObjectMeta: controllerruntime.ObjectMeta{
+			Name:      "my-instrumenter",
+			Namespace: defaultNS,
+		},
+		Spec: v1alpha1.InstrumenterSpec{
+			Selector: v1alpha1.Selector{PortLabel: "autoinstrument.open.port"},
+		},
+	}
 	Context("Instrumeting single Pod", func() {
+		singleTestPod, instrumenter := singleTestPodTemplate, instrumenterTemplate
 		It("should add an instrumenter sidecar to that Pod", func() {
 			By("Creating target Pod")
-			Expect(k8sClient.Create(ctx, &v1.Pod{
-				ObjectMeta: controllerruntime.ObjectMeta{
-					Name:      "instrumentable-pod",
-					Namespace: defaultNS,
-					Labels: map[string]string{
-						"autoinstrument.open.port": "8080",
-					},
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
-						Name:  "my-pod-container",
-						Image: "foo-image",
-					}},
-				},
-			})).To(Succeed())
+			Expect(k8sClient.Create(ctx, &singleTestPod)).To(Succeed())
 
 			By("Deploying an instrumenter instance")
-			Expect(k8sClient.Create(ctx, &v1alpha1.Instrumenter{
-				ObjectMeta: controllerruntime.ObjectMeta{
-					Name:      "my-instrumenter",
-					Namespace: defaultNS,
-				},
-				Spec: v1alpha1.InstrumenterSpec{
-					Selector: v1alpha1.Selector{PortLabel: "autoinstrument.open.port"},
-				},
-			})).To(Succeed())
+			Expect(k8sClient.Create(ctx, &instrumenter)).To(Succeed())
 
 			By("waiting to the Pod to be restarted and regenerated")
 			Eventually(func() error {
@@ -60,19 +70,158 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 					&pod); err != nil {
 					return err
 				}
-				if len(pod.Spec.Containers) != 2 {
-					return fmt.Errorf("expecting to have 2 containers. Got %d", len(pod.Spec.Containers))
+				return assertPod(&pod)
+			}, timeout, interval).Should(Succeed())
+		})
+		It("should properly remove the created resources", func() {
+			Expect(k8sClient.Delete(ctx, &singleTestPod)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &instrumenter)).Should(Succeed())
+			expectNotFound(&instrumenter)
+		})
+	})
+
+	Context("Ignoring pods that aren't labeled", func() {
+		ignorablePod, instrumenter := singleTestPodTemplate, instrumenterTemplate
+		ignorablePod.Labels = nil
+		It("should NOT add an instrumenter sidecar to that Pod", func() {
+			By("Creating ignorable Pod")
+			Expect(k8sClient.Create(ctx, &ignorablePod)).To(Succeed())
+
+			By("Deploying an instrumenter instance")
+			Expect(k8sClient.Create(ctx, &instrumenter)).To(Succeed())
+
+			Consistently(func() interface{} {
+				pod := &v1.Pod{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      ignorablePod.Name,
+					Namespace: ignorablePod.Namespace,
+				}, pod); err != nil {
+					return err
 				}
-				instrum := pod.Spec.Containers[1]
-				Expect(instrum.Name).To(Equal("grafana-ebpf-autoinstrumenter"))
-				Expect(instrum.Image).To(Equal("grafana/ebpf-autoinstrument:latest"))
-				Expect(instrum.Env).To(ContainElement(v1.EnvVar{Name: "OPEN_PORT", Value: "8080"}))
+				return pod.Spec.Containers
+			}).Should(HaveLen(1))
+		})
+		It("should properly remove the created resources", func() {
+			Expect(k8sClient.Delete(ctx, &ignorablePod)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &instrumenter)).Should(Succeed())
+			expectNotFound(&instrumenter)
+		})
+	})
+
+	Context("Ignoring pods in another namespace", func() {
+		ignorablePod, instrumenter := singleTestPodTemplate, instrumenterTemplate
+		ignorablePod.Namespace = "chachacha"
+		It("should NOT add an instrumenter sidecar to that Pod", func() {
+			By("Creating another namespace")
+			Expect(k8sClient.Create(ctx, &v1.Namespace{ObjectMeta: controllerruntime.ObjectMeta{
+				Name: ignorablePod.Namespace}})).To(Succeed())
+
+			By("Creating ignorable Pod")
+			Expect(k8sClient.Create(ctx, &ignorablePod)).To(Succeed())
+
+			By("Deploying an instrumenter instance")
+			Expect(k8sClient.Create(ctx, &instrumenter)).To(Succeed())
+
+			Consistently(func() interface{} {
+				pod := &v1.Pod{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      ignorablePod.Name,
+					Namespace: ignorablePod.Namespace,
+				}, pod); err != nil {
+					return err
+				}
+				return pod.Spec.Containers
+			}).Should(HaveLen(1))
+		})
+		It("should properly remove the created resources", func() {
+			Expect(k8sClient.Delete(ctx, &ignorablePod)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &instrumenter)).Should(Succeed())
+			expectNotFound(&instrumenter)
+		})
+	})
+
+	Context("Instrumenting ReplicaSets", func() {
+		replicaSet := appsv1.ReplicaSet{
+			ObjectMeta: controllerruntime.ObjectMeta{
+				Name:      "my-rs",
+				Namespace: defaultNS,
+			},
+			Spec: appsv1.ReplicaSetSpec{
+				Replicas: helper.Ptr[int32](3),
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: controllerruntime.ObjectMeta{Labels: map[string]string{
+						"app":                      "test",
+						"autoinstrument.open.port": "8080",
+					}},
+					Spec: singleTestPodTemplate.Spec,
+				},
+			},
+		}
+		instrumenter := instrumenterTemplate
+		It("should add an instrumenter sidecar to the labeled Pods of a given ReplicaSet", func() {
+			By("creating a ReplicaSet")
+			Expect(k8sClient.Create(ctx, &replicaSet)).To(Succeed())
+
+			By("Deploying an instrumenter instance")
+			Expect(k8sClient.Create(ctx, &instrumenter)).To(Succeed())
+
+			By("waiting to all ReplicaSet Pods to be restarted and regenerated")
+			Eventually(func() error {
+				podsList := v1.PodList{}
+				if err := k8sClient.List(ctx,
+					&podsList,
+					client.InNamespace(defaultNS),
+				); err != nil {
+					return err
+				}
+				rsPods := stream.OfSlice(podsList.Items).Filter(func(pod v1.Pod) bool {
+					return len(pod.OwnerReferences) > 0 && pod.OwnerReferences[0].Name == "my-rs"
+				}).ToSlice()
+				if len(rsPods) != 3 {
+					return fmt.Errorf("expecting 3 matching pods. Got %d", len(rsPods))
+				}
+				for _, pod := range rsPods {
+					if err := assertPod(&pod); err != nil {
+						return err
+					}
+				}
 				return nil
 			}, timeout, interval).Should(Succeed())
 		})
 	})
-
-	//Context("Instrumenting Deployment", func() {
-	//
-	//})
 })
+
+func assertPod(pod *v1.Pod) error {
+	if len(pod.Spec.Containers) != 2 {
+		return fmt.Errorf("expecting to have 2 containers. Got %d", len(pod.Spec.Containers))
+	}
+	instrum := pod.Spec.Containers[1]
+	if instrum.Name != "grafana-ebpf-autoinstrumenter" {
+		return fmt.Errorf("invalid name: %s", instrum.Name)
+	}
+	if instrum.Image != "grafana/ebpf-autoinstrument:latest" {
+		return fmt.Errorf("invalid name: %s", instrum.Name)
+	}
+	found := false
+	for _, e := range instrum.Env {
+		found = found || e == v1.EnvVar{Name: "OPEN_PORT", Value: "8080"}
+	}
+	if !found {
+		return fmt.Errorf("expecting env %v to contain OPEN_PORT=8080", instrum.Env)
+	}
+	return nil
+}
+
+func expectNotFound(obj client.Object) {
+	Eventually(func() error {
+		err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      obj.GetName(),
+			Namespace: obj.GetNamespace(),
+		}, obj)
+		if err == nil || !errors.IsNotFound(err) {
+			return fmt.Errorf("expecting Not Found error. Got: %w", err)
+		}
+		return nil
+	}, timeout, interval).Should(Succeed())
+}
