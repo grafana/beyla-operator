@@ -77,15 +77,12 @@ func (wh *podSidecarWebHook) Default(ctx context.Context, obj runtime.Object) er
 	for i := range instrumenters.Items {
 		instr := &instrumenters.Items[i]
 		iq := sidecar.InstrumentQuery{
-			PortLabel: instr.Spec.Selector.PortLabel,
+			InstrumenterName: instr.Name,
+			PortLabel:        instr.Spec.Selector.PortLabel,
 		}
 		dbg.Info("checking if the Pod needs to be instrumented", "query", iq)
-		ok, err := sidecar.AddInstrumenter(iq, pod)
-		if err != nil {
-			return fmt.Errorf("adding instrumenter to pod %s/%s: %w",
-				pod.Namespace, pod.Name, err)
-		}
-		if ok {
+		if sidecar.InstrumentIfRequired(iq, pod) {
+			dbg.Info("pod successfully instrumented")
 			return nil
 		}
 	}

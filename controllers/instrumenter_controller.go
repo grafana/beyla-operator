@@ -100,28 +100,27 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 
 	logger.V(lvl.Debug).Info("found pods to instrument", "len", len(podList.Items))
 
-	iq := sidecar.InstrumentQuery{PortLabel: instr.Spec.Selector.PortLabel}
+	iq := sidecar.InstrumentQuery{
+		InstrumenterName: instr.Name,
+		PortLabel:        instr.Spec.Selector.PortLabel,
+	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		podLog := logger.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
 		podLog.V(lvl.Debug).Info("checking if Pod needs to be instrumented")
-		mustUpdate, err := sidecar.AddInstrumenter(iq, pod)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if mustUpdate {
-			// we can't really update. We delete the Pod and let the Mutator Hook to attach the sidecar
-			podLog.V(lvl.Debug).Info("deleting Pod to recreate it with an instrumenter sidecar")
-
+		if sidec, ok := sidecar.NeedsInstrumentation(iq, pod); ok {
+			podLog.V(lvl.Debug).Info("Destroying Pod to recreate it with an instrumenter sidecar")
 			if err := r.Delete(ctx, pod); err != nil {
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 			}
 			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
 			// needs to be created again
 			if len(pod.OwnerReferences) == 0 {
+				podLog.V(lvl.Debug).Info("Recreating pod")
 				pod.ResourceVersion = ""
 				pod.UID = ""
 				pod.Status = corev1.PodStatus{}
+				sidecar.AddInstrumenter(iq.InstrumenterName, sidec, pod)
 				if err := r.Create(ctx, pod); err != nil {
 					return ctrl.Result{}, fmt.Errorf("can't recreate Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 				}

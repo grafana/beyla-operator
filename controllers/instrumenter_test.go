@@ -71,4 +71,8 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			}, timeout, interval).Should(Succeed())
 		})
 	})
+
+	//Context("Instrumenting Deployment", func() {
+	//
+	//})
 })
