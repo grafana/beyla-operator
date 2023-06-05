@@ -81,8 +81,48 @@ func (r *InstrumenterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("onDeletion", "req", req)
+	logger := log.FromContext(ctx, "name", req.Name, "namespace", req.Namespace)
+	logger.Info("deleted instrumenter")
+	dbg := logger.V(lvl.Debug)
+	// Look for all the pods in the NS that are instrumented by the removed Instrumenter
+	podList := corev1.PodList{}
+	if err := r.List(ctx, &podList,
+		client.InNamespace(req.Namespace),
+		client.HasLabels{sidecar.InstrumentedLabel}); err != nil {
+		return ctrl.Result{Requeue: true}, fmt.Errorf("reading pods: %w", err)
+	}
+	dbg.Info("going to remove all the pods whose "+sidecar.InstrumentedLabel+" points to the deleted instrumenter",
+		"candidatePods", len(podList.Items))
+	for i := range podList.Items {
+		p := &podList.Items[i]
+		if instrumenterName := p.Labels[sidecar.InstrumentedLabel]; instrumenterName == req.Name {
+			dbg := dbg.WithValues("podName", p.Name, "podNamespace", p.Namespace)
+			dbg.Info("removing Pod")
+			if err := r.Delete(ctx, p); err != nil {
+				return ctrl.Result{Requeue: true}, fmt.Errorf("deleting pod: %w", err)
+			}
+			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
+			// need to be explicitly recreated
+			if len(p.OwnerReferences) == 0 {
+				dbg.Info("Recreating pod")
+				// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
+				// need to be created again
+				if len(p.OwnerReferences) == 0 {
+					dbg.Info("Recreating pod")
+					sidecar.RemoveInstrumenter(p)
+					p.ResourceVersion = ""
+					p.UID = ""
+					p.Status = corev1.PodStatus{}
+					if err := r.Create(ctx, p); err != nil {
+						return ctrl.Result{}, fmt.Errorf("can't recreate Pod %s/%s: %w", p.Namespace, p.Name, err)
+					}
+				}
+			}
+		} else {
+			dbg.Info("this Pod is instumented by another instrumenter. Skipping",
+				"instrumentedBy", instrumenterName, "podName", p.Name, "podNamespace", p.Namespace)
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -98,7 +138,7 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 		return ctrl.Result{}, fmt.Errorf("reading pods: %w", err)
 	}
 
-	logger.V(lvl.Debug).Info("found pods to instrument", "len", len(podList.Items))
+	logger.V(lvl.Debug).Info("list of pods to instrument", "len", len(podList.Items))
 
 	iq := sidecar.InstrumentQuery{
 		InstrumenterName: instr.Name,
@@ -114,7 +154,7 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 			}
 			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
-			// needs to be created again
+			// need to be explicitly recreated
 			if len(pod.OwnerReferences) == 0 {
 				podLog.V(lvl.Debug).Info("Recreating pod")
 				pod.ResourceVersion = ""
