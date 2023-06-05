@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
+
 	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
@@ -77,6 +79,49 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			Expect(k8sClient.Delete(ctx, &singleTestPod)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, &instrumenter)).Should(Succeed())
 			expectNotFound(&instrumenter)
+		})
+	})
+
+	Context("Uninstrumenting Pod after Instrumenter removal", func() {
+		singleTestPod, instrumenter := singleTestPodTemplate, instrumenterTemplate
+		It("Prerequisite: running an instrumented Pod, and an instrumenter", func() {
+			Expect(k8sClient.Create(ctx, &singleTestPod)).To(Succeed())
+			Expect(k8sClient.Create(ctx, &instrumenter)).To(Succeed())
+			Eventually(func() error {
+				pod := v1.Pod{}
+				if err := k8sClient.Get(ctx,
+					types.NamespacedName{Name: "instrumentable-pod", Namespace: defaultNS},
+					&pod); err != nil {
+					return err
+				}
+				return assertPod(&pod)
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should remove instrumenter sidecar", func() {
+			By("Removing instrumenter")
+			Expect(k8sClient.Delete(ctx, &instrumenter)).To(Succeed())
+
+			By("waiting to the Pod to be restarted and regenerated")
+			Eventually(func() error {
+				pod := v1.Pod{}
+				if err := k8sClient.Get(ctx,
+					types.NamespacedName{Name: "instrumentable-pod", Namespace: defaultNS},
+					&pod); err != nil {
+					return err
+				}
+				if len(pod.Spec.Containers) > 1 {
+					return fmt.Errorf("expecting Pod to have a single container. Has %d", len(pod.Spec.Containers))
+				}
+				if len(pod.Labels) > 0 && pod.Labels[sidecar.InstrumentedLabel] != "" {
+					return fmt.Errorf("unexpected label %s: %q",
+						sidecar.InstrumentedLabel, pod.Labels[sidecar.InstrumentedLabel])
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+		})
+		It("should properly remove the created resources", func() {
+			Expect(k8sClient.Delete(ctx, &singleTestPod)).Should(Succeed())
 		})
 	})
 
@@ -160,6 +205,9 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 		}
 		instrumenter := instrumenterTemplate
 		It("should add an instrumenter sidecar to the labeled Pods of a given ReplicaSet", func() {
+
+			Skip("TO DO: move this whole Context to an e2e test, as EnvTest create Pods after deploying a ReplicaSet")
+
 			By("creating a ReplicaSet")
 			Expect(k8sClient.Create(ctx, &replicaSet)).To(Succeed())
 

@@ -3,6 +3,8 @@ package sidecar
 import (
 	"reflect"
 
+	"github.com/mariomac/gostream/stream"
+
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
@@ -16,7 +18,7 @@ const (
 	instrumenterImage           = "grafana/ebpf-autoinstrument:latest"
 	instrumenterImagePullPolicy = "Always"
 
-	instrumentedLabel = "grafana.com/instrumented-by"
+	InstrumentedLabel = "grafana.com/instrumented-by"
 )
 
 var log = logf.Log.WithName("sidecar-instrumenter")
@@ -35,7 +37,7 @@ func NeedsInstrumentation(iq InstrumentQuery, dst *v1.Pod) (*v1.Container, bool)
 	// if the Pod does not have the port selection label,
 	// or it's being already instrumented by another Instrumenter
 	if dst.Labels[iq.PortLabel] == "" ||
-		(dst.Labels[instrumentedLabel] != "" && dst.Labels[instrumentedLabel] != iq.InstrumenterName) {
+		(dst.Labels[InstrumentedLabel] != "" && dst.Labels[InstrumentedLabel] != iq.InstrumenterName) {
 		return nil, false
 	}
 	expected := buildSidecar(&iq, dst)
@@ -47,14 +49,6 @@ func NeedsInstrumentation(iq InstrumentQuery, dst *v1.Pod) (*v1.Container, bool)
 		return nil, false
 	}
 	return expected, true
-}
-
-// labelInstrumented annotates a pod as already being instrumented
-func labelInstrumented(instrumenterName string, dst *v1.Pod) {
-	if dst.ObjectMeta.Labels == nil {
-		dst.ObjectMeta.Labels = map[string]string{}
-	}
-	dst.ObjectMeta.Labels[instrumentedLabel] = instrumenterName
 }
 
 // InstrumentIfRequired instruments, if needed, the destination pod, and returns whether it has been instrumented
@@ -76,6 +70,14 @@ func AddInstrumenter(instrumenterName string, sidecar *v1.Container, dst *v1.Pod
 		dst.Spec.Containers = append(dst.Spec.Containers, *sidecar)
 	}
 	labelInstrumented(instrumenterName, dst)
+}
+
+func RemoveInstrumenter(dst *v1.Pod) {
+	unlabelInstrumented(dst)
+	dst.Spec.Containers = stream.OfSlice(dst.Spec.Containers).
+		Filter(func(c v1.Container) bool {
+			return c.Name != instrumenterName
+		}).ToSlice()
 }
 
 func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) *v1.Container {
@@ -113,4 +115,19 @@ func findByName(containers []v1.Container) (*v1.Container, bool) {
 		}
 	}
 	return nil, false
+}
+
+// labelInstrumented annotates a pod as already being instrumented
+func labelInstrumented(instrumenterName string, dst *v1.Pod) {
+	if dst.Labels == nil {
+		dst.Labels = map[string]string{}
+	}
+	dst.Labels[InstrumentedLabel] = instrumenterName
+}
+
+func unlabelInstrumented(dst *v1.Pod) {
+	if len(dst.Labels) == 0 {
+		return
+	}
+	delete(dst.Labels, InstrumentedLabel)
 }
