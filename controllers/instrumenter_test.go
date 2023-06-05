@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
-
 	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
@@ -113,9 +111,9 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 				if len(pod.Spec.Containers) > 1 {
 					return fmt.Errorf("expecting Pod to have a single container. Has %d", len(pod.Spec.Containers))
 				}
-				if len(pod.Labels) > 0 && pod.Labels[sidecar.InstrumentedLabel] != "" {
+				if len(pod.Labels) > 0 && pod.Labels[v1alpha1.InstrumentedLabel] != "" {
 					return fmt.Errorf("unexpected label %s: %q",
-						sidecar.InstrumentedLabel, pod.Labels[sidecar.InstrumentedLabel])
+						v1alpha1.InstrumentedLabel, pod.Labels[v1alpha1.InstrumentedLabel])
 				}
 				return nil
 			}, timeout, interval).Should(Succeed())
@@ -196,7 +194,7 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: controllerruntime.ObjectMeta{Labels: map[string]string{
-						"app":                   "test",
+						"app":                         "test",
 						"grafana.com/instrument-port": "8080",
 					}},
 					Spec: singleTestPodTemplate.Spec,

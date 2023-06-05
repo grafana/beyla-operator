@@ -29,7 +29,6 @@ import (
 
 	appo11yv1alpha1 "github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1"
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper/lvl"
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
 )
 
 // InstrumenterReconciler reconciles a Instrumenter object
@@ -80,14 +79,14 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 	podList := corev1.PodList{}
 	if err := r.List(ctx, &podList,
 		client.InNamespace(req.Namespace),
-		client.HasLabels{sidecar.InstrumentedLabel}); err != nil {
+		client.HasLabels{appo11yv1alpha1.InstrumentedLabel}); err != nil {
 		return ctrl.Result{Requeue: true}, fmt.Errorf("reading pods: %w", err)
 	}
-	dbg.Info("going to remove all the pods whose "+sidecar.InstrumentedLabel+" points to the deleted instrumenter",
+	dbg.Info("going to remove all the pods whose "+appo11yv1alpha1.InstrumentedLabel+" points to the deleted instrumenter",
 		"candidatePods", len(podList.Items))
 	for i := range podList.Items {
 		p := &podList.Items[i]
-		if instrumenterName := p.Labels[sidecar.InstrumentedLabel]; instrumenterName == req.Name {
+		if instrumenterName := p.Labels[appo11yv1alpha1.InstrumentedLabel]; instrumenterName == req.Name {
 			dbg := dbg.WithValues("podName", p.Name, "podNamespace", p.Namespace)
 			dbg.Info("removing Pod")
 			if err := r.Delete(ctx, p); err != nil {
@@ -101,7 +100,7 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 				// need to be created again
 				if len(p.OwnerReferences) == 0 {
 					dbg.Info("Recreating pod")
-					sidecar.RemoveInstrumenter(p)
+					appo11yv1alpha1.RemoveInstrumenter(p)
 					p.ResourceVersion = ""
 					p.UID = ""
 					p.Status = corev1.PodStatus{}
@@ -133,15 +132,11 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 
 	dbg.Info("list of pods to instrument", "len", len(podList.Items))
 
-	iq := sidecar.InstrumentQuery{
-		InstrumenterName: instr.Name,
-		PortLabel:        instr.Spec.Selector.PortLabel,
-	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		podLog := dbg.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
 		podLog.Info("checking if Pod needs to be instrumented")
-		if sidec, ok := sidecar.NeedsInstrumentation(iq, pod); ok {
+		if sidec, ok := appo11yv1alpha1.NeedsInstrumentation(instr, pod); ok {
 			podLog.Info("Destroying Pod to recreate it with an instrumenter sidecar")
 			if err := r.Delete(ctx, pod); err != nil {
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
@@ -153,7 +148,7 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 				pod.ResourceVersion = ""
 				pod.UID = ""
 				pod.Status = corev1.PodStatus{}
-				sidecar.AddInstrumenter(iq.InstrumenterName, sidec, pod)
+				appo11yv1alpha1.AddInstrumenter(instr.Name, sidec, pod)
 				if err := r.Create(ctx, pod); err != nil {
 					return ctrl.Result{}, fmt.Errorf("can't recreate Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 				}

@@ -59,7 +59,10 @@ type Selector struct {
 type Prometheus struct {
 	// +kubebuilder:default:="/metrics"
 	Path string `json:"path,omitempty"`
+
 	// +kubebuilder:default:=9102
+	// +kubebuilder:validate:Minimum:=1
+	// +kubebuilder:validate:Maximum:=65535
 	Port int `json:"port,omitempty"`
 
 	// +kubebuilder:default:={scrape:"prometheus.io/scrape"}
