@@ -20,16 +20,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Exporter type for metrics
+// +kubebuilder:validation:Enum:="Prometheus";"OpenTelemetryMetrics";"OpenTelemetryTraces"
+type Exporter string
+
+const (
+	ExporterPrometheus  = "Prometheus"
+	ExporterOTELMetrics = "OpenTelemetryMetrics"
+	ExporterOTELTraces  = "OpenTelemetryTraces"
+)
 
 // InstrumenterSpec defines the desired state of Instrumenter
 type InstrumenterSpec struct {
+	// Exporters define the exporter endpoints that the autoinstrumenter must support
+	// +optional
+	// +kubebuilder:default:={"Prometheus"}
+	Export []Exporter `json:"export"`
 
 	// Selector overrides the selection of Pods and executables to instrument
-	// +optional
-	// +kubebuilder:default:={portLabel:"autoinstrument.open.port"}
-	Selector Selector `json:"selector"`
+	// +kubebuilder:default:={portLabel:"grafana.com/instrument-port"}
+	Selector Selector `json:"selector,omitempty"`
+
+	// Prometheus allows configuring the autoinstrumenter as a Prometheus pull exporter.
+	// +kubebuilder:default:={path:"/metrics"}
+	Prometheus Prometheus `json:"prometheus"`
 }
 
 // Selector allows selecting the Pod and executable to autoinstrument
@@ -38,8 +52,32 @@ type Selector struct {
 	// according to the port it opens.
 	// Any pod containing the label would be selected for instrumentation
 	// +optional
-	// +kubebuilder:default:="autoinstrument.open.port"
+	// +kubebuilder:default:="grafana.com/instrument-port"
 	PortLabel string `json:"portLabel"`
+}
+
+type Prometheus struct {
+	// +kubebuilder:default:="/metrics"
+	Path string `json:"path,omitempty"`
+	// +kubebuilder:default:=9102
+	Port int `json:"port,omitempty"`
+
+	// +kubebuilder:default:={scrape:"prometheus.io/scrape"}
+	Labels PrometheusLabels `json:"labels,omitempty"`
+}
+
+type PrometheusLabels struct {
+	// +kubebuilder:default:="prometheus.io/scrape"
+	Scrape string `json:"scrape,omitempty"`
+
+	// +kubebuilder:default:="prometheus.io/scheme"
+	Scheme string `json:"scheme,omitempty"`
+
+	// +kubebuilder:default:="prometheus.io/port"
+	Port string `json:"port,omitempty"`
+
+	// +kubebuilder:default:="prometheus.io/path"
+	Path string `json:"path,omitempty"`
 }
 
 // InstrumenterStatus defines the observed state of Instrumenter

@@ -36,7 +36,7 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			Name:      "instrumentable-pod",
 			Namespace: defaultNS,
 			Labels: map[string]string{
-				"autoinstrument.open.port": "8080",
+				"grafana.com/instrument-port": "8080",
 			},
 		},
 		Spec: v1.PodSpec{
@@ -52,7 +52,7 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			Namespace: defaultNS,
 		},
 		Spec: v1alpha1.InstrumenterSpec{
-			Selector: v1alpha1.Selector{PortLabel: "autoinstrument.open.port"},
+			Selector: v1alpha1.Selector{PortLabel: "grafana.com/instrument-port"},
 		},
 	}
 	Context("Instrumeting single Pod", func() {
@@ -196,8 +196,8 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: controllerruntime.ObjectMeta{Labels: map[string]string{
-						"app":                      "test",
-						"autoinstrument.open.port": "8080",
+						"app":                   "test",
+						"grafana.com/instrument-port": "8080",
 					}},
 					Spec: singleTestPodTemplate.Spec,
 				},

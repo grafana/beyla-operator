@@ -70,6 +70,8 @@ func AddInstrumenter(instrumenterName string, sidecar *v1.Container, dst *v1.Pod
 		dst.Spec.Containers = append(dst.Spec.Containers, *sidecar)
 	}
 	labelInstrumented(instrumenterName, dst)
+	// TODO: on Pod recreation, restore the previous value of this property (e.g. store it in an annotation)
+	dst.Spec.ShareProcessNamespace = helper.Ptr(true)
 }
 
 func RemoveInstrumenter(dst *v1.Pod) {

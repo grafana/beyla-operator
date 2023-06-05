@@ -34,20 +34,65 @@ spec:
           spec:
             description: InstrumenterSpec defines the desired state of Instrumenter
             properties:
+              export:
+                default:
+                - Prometheus
+                description: Exporters define the exporter endpoints that the autoinstrumenter
+                  must support
+                items:
+                  description: Exporter type for metrics
+                  enum:
+                  - Prometheus
+                  - OpenTelemetryMetrics
+                  - OpenTelemetryTraces
+                  type: string
+                type: array
+              prometheus:
+                default:
+                  path: /metrics
+                description: Prometheus allows configuring the autoinstrumenter as
+                  a Prometheus pull exporter.
+                properties:
+                  labels:
+                    default:
+                      scrape: prometheus.io/scrape
+                    properties:
+                      path:
+                        default: prometheus.io/path
+                        type: string
+                      port:
+                        default: prometheus.io/port
+                        type: string
+                      scheme:
+                        default: prometheus.io/scheme
+                        type: string
+                      scrape:
+                        default: prometheus.io/scrape
+                        type: string
+                    type: object
+                  path:
+                    default: /metrics
+                    type: string
+                  port:
+                    default: 9102
+                    type: integer
+                type: object
               selector:
                 default:
-                  portLabel: autoinstrument.open.port
+                  portLabel: grafana.com/instrument-port
                 description: Selector overrides the selection of Pods and executables
                   to instrument
                 properties:
                   portLabel:
-                    default: autoinstrument.open.port
+                    default: grafana.com/instrument-port
                     description: PortLabel specifies which Pod label would specify
                       which executable needs to be instrumented, according to the
                       port it opens. Any pod containing the label would be selected
                       for instrumentation
                     type: string
                 type: object
+            required:
+            - prometheus
             type: object
           status:
             description: InstrumenterStatus defines the observed state of Instrumenter

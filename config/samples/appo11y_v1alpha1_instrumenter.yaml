@@ -9,5 +9,14 @@ metadata:
     app.kubernetes.io/created-by: ebpf-autoinstrument-operator
   name: instrumenter-sample
 spec:
+  export: ["Prometheus"]
   selector:
-    portLabel: autoinstrument.open.port
+    portLabel: grafana.com/instrument-port
+  prometheus:
+    path: "/metrics"
+    port: "9102"
+    labels:
+      scrape: "prometheus.io/scrape"
+      scheme: "prometheus.io/scheme"
+      port: "prometheus.io/port"
+      path: "prometheus.io/path"

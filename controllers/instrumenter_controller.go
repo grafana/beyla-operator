@@ -45,17 +45,9 @@ type InstrumenterReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Instrumenter object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *InstrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
-	logger.Info("reconcile loop", "request", req.String())
+	logger.Info("reconcile loop", "request", req)
 
 	instr := appo11yv1alpha1.Instrumenter{}
 	if err := r.Get(ctx, req.NamespacedName, &instr); err != nil {
@@ -128,8 +120,9 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 }
 
 func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo11yv1alpha1.Instrumenter) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("onCreateUpdate", "name", instr.Name, "namespace", instr.Namespace)
+	logger := log.FromContext(ctx, "name", instr.Name, "namespace", instr.Namespace)
+	dbg := logger.V(lvl.Debug)
+	dbg.Info("onCreateUpdate", "spec", instr.Spec)
 
 	podList := corev1.PodList{}
 	if err := r.List(ctx, &podList,
@@ -138,7 +131,7 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 		return ctrl.Result{}, fmt.Errorf("reading pods: %w", err)
 	}
 
-	logger.V(lvl.Debug).Info("list of pods to instrument", "len", len(podList.Items))
+	dbg.Info("list of pods to instrument", "len", len(podList.Items))
 
 	iq := sidecar.InstrumentQuery{
 		InstrumenterName: instr.Name,
@@ -146,17 +139,17 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		podLog := logger.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
-		podLog.V(lvl.Debug).Info("checking if Pod needs to be instrumented")
+		podLog := dbg.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
+		podLog.Info("checking if Pod needs to be instrumented")
 		if sidec, ok := sidecar.NeedsInstrumentation(iq, pod); ok {
-			podLog.V(lvl.Debug).Info("Destroying Pod to recreate it with an instrumenter sidecar")
+			podLog.Info("Destroying Pod to recreate it with an instrumenter sidecar")
 			if err := r.Delete(ctx, pod); err != nil {
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 			}
 			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
 			// need to be explicitly recreated
 			if len(pod.OwnerReferences) == 0 {
-				podLog.V(lvl.Debug).Info("Recreating pod")
+				podLog.Info("Recreating pod")
 				pod.ResourceVersion = ""
 				pod.UID = ""
 				pod.Status = corev1.PodStatus{}
