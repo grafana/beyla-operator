@@ -6,8 +6,6 @@ import (
 
 	"github.com/mariomac/gostream/stream"
 
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
 
 	v1 "k8s.io/api/core/v1"
@@ -20,9 +18,11 @@ const (
 	instrumenterImagePullPolicy = "Always"
 
 	InstrumentedLabel = "grafana.com/instrumented-by"
-)
 
-var log = logf.Log.WithName("sidecar-instrumenter")
+	// TODO: user-configurable
+	metricsPath = "/v1/metrics"
+	tracesPath  = "/v1/traces"
+)
 
 // NeedsInstrumentation returns whether the given pod requires instrumentation,
 // and a container with the instrumenter, in case of requiring it.
@@ -97,8 +97,6 @@ func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 		Env: []v1.EnvVar{
 			{Name: "SERVICE_NAME", Value: svcName},
 			{Name: "SERVICE_NAMESPACE", Value: svcNamespace},
-			// TODO: use only in debug mode
-			{Name: "PRINT_TRACES", Value: "true"},
 			{Name: "OPEN_PORT", Value: lbls[iq.Spec.Selector.PortLabel]},
 		},
 	}
@@ -109,32 +107,53 @@ func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 	if _, ok := exporters[ExporterPrometheus]; ok {
 		configurePrometheusExporter(svcName, iq, dst, sidecar)
 	}
-	if _, ok := exporters[ExporterOTELMetrics]; ok {
-		log.Info("exporter " + ExporterOTELMetrics + " not yet available. Ignoring")
-	}
-	if _, ok := exporters[ExporterOTELTraces]; ok {
-		log.Info("exporter " + ExporterOTELTraces + " not yet available. Ignoring")
+	_, otelM := exporters[ExporterOTELMetrics]
+	_, otelT := exporters[ExporterOTELMetrics]
+	if otelM || otelT {
+		configOpenTelemetry(otelM, otelT, iq, sidecar)
 	}
 
+	sidecar.Env = append(sidecar.Env, iq.Spec.OverrideEnv...)
 	return sidecar
 }
 
 func configurePrometheusExporter(svcName string, iq *Instrumenter, dst *v1.Pod, sidecar *v1.Container) {
 	portStr := strconv.Itoa(iq.Spec.Prometheus.Port)
-	path := "/metrics" // TODO: make configurable
 	if dst.Annotations == nil {
 		dst.Annotations = map[string]string{}
 	}
 	dst.Annotations[iq.Spec.Prometheus.Annotations.Scrape] = "true"
 	dst.Annotations[iq.Spec.Prometheus.Annotations.Port] = portStr
 	dst.Annotations[iq.Spec.Prometheus.Annotations.Scheme] = "http" // TODO: make configurable
-	dst.Annotations[iq.Spec.Prometheus.Annotations.Path] = path
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Path] = iq.Spec.Prometheus.Path
 	sidecar.Env = append(sidecar.Env,
 		v1.EnvVar{Name: "PROMETHEUS_SERVICE_NAME", Value: svcName},
 		v1.EnvVar{Name: "PROMETHEUS_PORT", Value: portStr},
-		v1.EnvVar{Name: "PROMETHEUS_PATH", Value: path},
+		v1.EnvVar{Name: "PROMETHEUS_PATH", Value: iq.Spec.Prometheus.Path},
 		// TODO: extra properties such as METRICS_REPORT_TARGET and METRICS_REPORT_PEER
 	)
+}
+
+func configOpenTelemetry(metrics, traces bool, iq *Instrumenter, sidecar *v1.Container) {
+	otel := &iq.Spec.OpenTelemetry
+	if !metrics {
+		sidecar.Env = append(sidecar.Env,
+			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", Value: otel.Endpoint + tracesPath})
+	} else if !traces {
+		sidecar.Env = append(sidecar.Env,
+			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", Value: otel.Endpoint + metricsPath})
+	} else {
+		sidecar.Env = append(sidecar.Env,
+			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: otel.Endpoint})
+	}
+	if otel.EndpointInsecure {
+		sidecar.Env = append(sidecar.Env,
+			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_INSECURE", Value: "true"})
+	}
+	// TODO: this should be added automatically from the autoinstrumenter. Kept here for backwards-compatibility
+	sidecar.Env = append(sidecar.Env,
+		v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "http/protobuf"})
+
 }
 
 func findByName(containers []v1.Container) (*v1.Container, bool) {

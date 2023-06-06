@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/created-by: ebpf-autoinstrument-operator
   name: instrumenter-sample
 spec:
-  export: ["Prometheus"]
+  export: [ "Prometheus" ] # Also valid: OpenTelemetryMetrics, OpenTelemetryTraces
   selector:
     portLabel: grafana.com/instrument-port
   prometheus:
@@ -20,3 +20,10 @@ spec:
       scheme: "prometheus.io/scheme"
       port: "prometheus.io/port"
       path: "prometheus.io/path"
+  openTelemetry:
+    endpoint: ""
+    endpointInsecure: false
+    interval: 5s
+  overrideEnv:
+    - name: PRINT_TRACES
+      value: "true"

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,7 +44,17 @@ type InstrumenterSpec struct {
 
 	// Prometheus allows configuring the autoinstrumenter as a Prometheus pull exporter.
 	// +kubebuilder:default:={path:"/metrics"}
-	Prometheus Prometheus `json:"prometheus"`
+	Prometheus Prometheus `json:"prometheus,omitempty"`
+
+	// OpenTelemetry allows configuring the autoinstrumenter as an OpenTelemetry metrics
+	// and traces exporter
+	// +kubebuilder:default:={interval:"5s"}
+	OpenTelemetry OpenTelemetry `json:"openTelemetry,omitempty"`
+
+	// OverrideEnv allows overriding the autoinstrumenter env vars for fine-grained
+	// configuration
+	// +optional
+	OverrideEnv []v1.EnvVar `json:"overrideEnv,omitempty"`
 }
 
 // Selector allows selecting the Pod and executable to autoinstrument
@@ -81,6 +92,21 @@ type PrometheusAnnotations struct {
 
 	// +kubebuilder:default:="prometheus.io/path"
 	Path string `json:"path,omitempty"`
+}
+
+type OpenTelemetry struct {
+	// Endpoint of the OpenTelemetry collector
+	// +optional
+	// +kubebuilder:validation:Pattern:="^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// EndpointInsecure set to true will skip verification of TLS certificates.
+	// +kubebuilder:default:=false
+	EndpointInsecure bool `json:"endpointInsecure,omitempty"`
+
+	// Interval is the intervening time between metrics exports
+	// +kubebuilder:default:="5s"
+	Interval metav1.Duration `json:"interval,omitempty"`
 }
 
 // InstrumenterStatus defines the observed state of Instrumenter
