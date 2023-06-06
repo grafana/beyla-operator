@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
-
 	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper"
@@ -36,7 +34,7 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			Name:      "instrumentable-pod",
 			Namespace: defaultNS,
 			Labels: map[string]string{
-				"autoinstrument.open.port": "8080",
+				"grafana.com/instrument-port": "8080",
 			},
 		},
 		Spec: v1.PodSpec{
@@ -52,7 +50,7 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 			Namespace: defaultNS,
 		},
 		Spec: v1alpha1.InstrumenterSpec{
-			Selector: v1alpha1.Selector{PortLabel: "autoinstrument.open.port"},
+			Selector: v1alpha1.Selector{PortLabel: "grafana.com/instrument-port"},
 		},
 	}
 	Context("Instrumeting single Pod", func() {
@@ -113,9 +111,9 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 				if len(pod.Spec.Containers) > 1 {
 					return fmt.Errorf("expecting Pod to have a single container. Has %d", len(pod.Spec.Containers))
 				}
-				if len(pod.Labels) > 0 && pod.Labels[sidecar.InstrumentedLabel] != "" {
+				if len(pod.Labels) > 0 && pod.Labels[v1alpha1.InstrumentedLabel] != "" {
 					return fmt.Errorf("unexpected label %s: %q",
-						sidecar.InstrumentedLabel, pod.Labels[sidecar.InstrumentedLabel])
+						v1alpha1.InstrumentedLabel, pod.Labels[v1alpha1.InstrumentedLabel])
 				}
 				return nil
 			}, timeout, interval).Should(Succeed())
@@ -196,8 +194,8 @@ var _ = Describe("Instrumenter Controller", Ordered, Serial, func() {
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: controllerruntime.ObjectMeta{Labels: map[string]string{
-						"app":                      "test",
-						"autoinstrument.open.port": "8080",
+						"app":                         "test",
+						"grafana.com/instrument-port": "8080",
 					}},
 					Spec: singleTestPodTemplate.Spec,
 				},
@@ -251,12 +249,29 @@ func assertPod(pod *v1.Pod) error {
 	if instrum.Image != "grafana/ebpf-autoinstrument:latest" {
 		return fmt.Errorf("invalid name: %s", instrum.Name)
 	}
-	found := false
-	for _, e := range instrum.Env {
-		found = found || e == v1.EnvVar{Name: "OPEN_PORT", Value: "8080"}
+	if pod.Spec.ShareProcessNamespace == nil || *pod.Spec.ShareProcessNamespace != true {
+		return fmt.Errorf("expecting ShareProcessNamespace=true. Got %v", pod.Spec.ShareProcessNamespace)
 	}
-	if !found {
-		return fmt.Errorf("expecting env %v to contain OPEN_PORT=8080", instrum.Env)
+	return assertEnvContains(instrum.Env, map[string]string{
+		"OPEN_PORT":               "8080",
+		"SERVICE_NAME":            "instrumentable-pod",
+		"SERVICE_NAMESPACE":       "default",
+		"PROMETHEUS_SERVICE_NAME": "instrumentable-pod",
+		"PROMETHEUS_PORT":         "9102",
+		"PROMETHEUS_PATH":         "/metrics",
+	})
+}
+
+func assertEnvContains(slice []v1.EnvVar, values map[string]string) error {
+	env := map[string]string{}
+	for _, e := range slice {
+		env[e.Name] = e.Value
+	}
+	for k, v := range values {
+		if env[k] != v {
+			return fmt.Errorf("expecting env %v to contain %v=%v. Got: %v",
+				env, k, v, env[k])
+		}
 	}
 	return nil
 }

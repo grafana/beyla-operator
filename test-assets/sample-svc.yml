@@ -16,11 +16,9 @@ spec:
     metadata:
       labels:
         app: goblog
-        autoinstrument.open.port: "8080"
+        grafana.com/instrument-port: "8080"
     spec:
       # required so the sidecar instrumenter can access the service process
-      # TODO: add by controller
-      shareProcessNamespace: true
       containers:
         - name: goblog
           image: mariomac/goblog:dev

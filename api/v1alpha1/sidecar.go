@@ -1,7 +1,8 @@
-package sidecar
+package v1alpha1
 
 import (
 	"reflect"
+	"strconv"
 
 	"github.com/mariomac/gostream/stream"
 
@@ -23,24 +24,19 @@ const (
 
 var log = logf.Log.WithName("sidecar-instrumenter")
 
-type InstrumentQuery struct {
-	InstrumenterName string
-	PortLabel        string
-}
-
 // NeedsInstrumentation returns whether the given pod requires instrumentation,
 // and a container with the instrumenter, in case of requiring it.
-func NeedsInstrumentation(iq InstrumentQuery, dst *v1.Pod) (*v1.Container, bool) {
+func NeedsInstrumentation(iq *Instrumenter, dst *v1.Pod) (*v1.Container, bool) {
 	if dst.Labels == nil {
 		return nil, false
 	}
 	// if the Pod does not have the port selection label,
 	// or it's being already instrumented by another Instrumenter
-	if dst.Labels[iq.PortLabel] == "" ||
-		(dst.Labels[InstrumentedLabel] != "" && dst.Labels[InstrumentedLabel] != iq.InstrumenterName) {
+	if dst.Labels[iq.Spec.Selector.PortLabel] == "" ||
+		(dst.Labels[InstrumentedLabel] != "" && dst.Labels[InstrumentedLabel] != iq.Name) {
 		return nil, false
 	}
-	expected := buildSidecar(&iq, dst)
+	expected := buildSidecar(iq, dst)
 	actual, ok := findByName(dst.Spec.Containers)
 	if !ok {
 		return expected, true
@@ -52,12 +48,12 @@ func NeedsInstrumentation(iq InstrumentQuery, dst *v1.Pod) (*v1.Container, bool)
 }
 
 // InstrumentIfRequired instruments, if needed, the destination pod, and returns whether it has been instrumented
-func InstrumentIfRequired(iq InstrumentQuery, dst *v1.Pod) bool {
+func InstrumentIfRequired(iq *Instrumenter, dst *v1.Pod) bool {
 	sidecar, ok := NeedsInstrumentation(iq, dst)
 	if !ok {
 		return false
 	}
-	AddInstrumenter(iq.InstrumenterName, sidecar, dst)
+	AddInstrumenter(iq.Name, sidecar, dst)
 	return true
 }
 
@@ -70,6 +66,8 @@ func AddInstrumenter(instrumenterName string, sidecar *v1.Container, dst *v1.Pod
 		dst.Spec.Containers = append(dst.Spec.Containers, *sidecar)
 	}
 	labelInstrumented(instrumenterName, dst)
+	// TODO: on Pod recreation, restore the previous value of this property (e.g. store it in an annotation)
+	dst.Spec.ShareProcessNamespace = helper.Ptr(true)
 }
 
 func RemoveInstrumenter(dst *v1.Pod) {
@@ -80,11 +78,14 @@ func RemoveInstrumenter(dst *v1.Pod) {
 		}).ToSlice()
 }
 
-func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) *v1.Container {
+func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 	lbls := dst.ObjectMeta.Labels
-	log.Info("labels", "labels", lbls, "query", iq)
+
+	// TODO: extract this information from owner (daemonset, deployment, replicaset...)
+	svcName, svcNamespace := dst.Name, dst.Namespace
+
 	// TODO: do not make pod failing if sidecar fails, just report it in the Instrumenter status
-	sidecar := v1.Container{
+	sidecar := &v1.Container{
 		Name:            instrumenterName,
 		Image:           instrumenterImage,
 		ImagePullPolicy: instrumenterImagePullPolicy,
@@ -93,19 +94,47 @@ func buildSidecar(iq *InstrumentQuery, dst *v1.Pod) *v1.Container {
 			Privileged: helper.Ptr(true),
 			RunAsUser:  helper.Ptr(int64(0)),
 		},
-		Env: []v1.EnvVar{{
-			Name:  "SERVICE_NAME",
-			Value: dst.Name,
-		}, {
-			Name:  "PRINT_TRACES",
-			Value: "true",
-		}, {
-			Name:  "OPEN_PORT",
-			Value: lbls[iq.PortLabel],
-		}},
+		Env: []v1.EnvVar{
+			{Name: "SERVICE_NAME", Value: svcName},
+			{Name: "SERVICE_NAMESPACE", Value: svcNamespace},
+			// TODO: use only in debug mode
+			{Name: "PRINT_TRACES", Value: "true"},
+			{Name: "OPEN_PORT", Value: lbls[iq.Spec.Selector.PortLabel]},
+		},
 	}
-	// TODO: add prometheus and scrape labels
-	return &sidecar
+	exporters := map[Exporter]struct{}{}
+	for _, e := range iq.Spec.Export {
+		exporters[e] = struct{}{}
+	}
+	if _, ok := exporters[ExporterPrometheus]; ok {
+		configurePrometheusExporter(svcName, iq, dst, sidecar)
+	}
+	if _, ok := exporters[ExporterOTELMetrics]; ok {
+		log.Info("exporter " + ExporterOTELMetrics + " not yet available. Ignoring")
+	}
+	if _, ok := exporters[ExporterOTELTraces]; ok {
+		log.Info("exporter " + ExporterOTELTraces + " not yet available. Ignoring")
+	}
+
+	return sidecar
+}
+
+func configurePrometheusExporter(svcName string, iq *Instrumenter, dst *v1.Pod, sidecar *v1.Container) {
+	portStr := strconv.Itoa(iq.Spec.Prometheus.Port)
+	path := "/metrics" // TODO: make configurable
+	if dst.Annotations == nil {
+		dst.Annotations = map[string]string{}
+	}
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Scrape] = "true"
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Port] = portStr
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Scheme] = "http" // TODO: make configurable
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Path] = path
+	sidecar.Env = append(sidecar.Env,
+		v1.EnvVar{Name: "PROMETHEUS_SERVICE_NAME", Value: svcName},
+		v1.EnvVar{Name: "PROMETHEUS_PORT", Value: portStr},
+		v1.EnvVar{Name: "PROMETHEUS_PATH", Value: path},
+		// TODO: extra properties such as METRICS_REPORT_TARGET and METRICS_REPORT_PEER
+	)
 }
 
 func findByName(containers []v1.Container) (*v1.Container, bool) {

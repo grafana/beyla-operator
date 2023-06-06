@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper/lvl"
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -76,12 +75,8 @@ func (wh *podSidecarWebHook) Default(ctx context.Context, obj runtime.Object) er
 	// at the moment, we leave it as an undefined behavior.
 	for i := range instrumenters.Items {
 		instr := &instrumenters.Items[i]
-		iq := sidecar.InstrumentQuery{
-			InstrumenterName: instr.Name,
-			PortLabel:        instr.Spec.Selector.PortLabel,
-		}
-		dbg.Info("checking if the Pod needs to be instrumented", "query", iq)
-		if sidecar.InstrumentIfRequired(iq, pod) {
+		dbg.Info("checking if the Pod needs to be instrumented", "instrumenter", instr.Name)
+		if InstrumentIfRequired(instr, pod) {
 			dbg.Info("pod successfully instrumented")
 			return nil
 		}

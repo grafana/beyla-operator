@@ -29,7 +29,6 @@ import (
 
 	appo11yv1alpha1 "github.com/grafana/ebpf-autoinstrument-operator/api/v1alpha1"
 	"github.com/grafana/ebpf-autoinstrument-operator/pkg/helper/lvl"
-	"github.com/grafana/ebpf-autoinstrument-operator/pkg/sidecar"
 )
 
 // InstrumenterReconciler reconciles a Instrumenter object
@@ -45,17 +44,9 @@ type InstrumenterReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Instrumenter object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *InstrumenterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
-	logger.Info("reconcile loop", "request", req.String())
+	logger.Info("reconcile loop", "request", req)
 
 	instr := appo11yv1alpha1.Instrumenter{}
 	if err := r.Get(ctx, req.NamespacedName, &instr); err != nil {
@@ -88,14 +79,14 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 	podList := corev1.PodList{}
 	if err := r.List(ctx, &podList,
 		client.InNamespace(req.Namespace),
-		client.HasLabels{sidecar.InstrumentedLabel}); err != nil {
+		client.HasLabels{appo11yv1alpha1.InstrumentedLabel}); err != nil {
 		return ctrl.Result{Requeue: true}, fmt.Errorf("reading pods: %w", err)
 	}
-	dbg.Info("going to remove all the pods whose "+sidecar.InstrumentedLabel+" points to the deleted instrumenter",
+	dbg.Info("going to remove all the pods whose "+appo11yv1alpha1.InstrumentedLabel+" points to the deleted instrumenter",
 		"candidatePods", len(podList.Items))
 	for i := range podList.Items {
 		p := &podList.Items[i]
-		if instrumenterName := p.Labels[sidecar.InstrumentedLabel]; instrumenterName == req.Name {
+		if instrumenterName := p.Labels[appo11yv1alpha1.InstrumentedLabel]; instrumenterName == req.Name {
 			dbg := dbg.WithValues("podName", p.Name, "podNamespace", p.Namespace)
 			dbg.Info("removing Pod")
 			if err := r.Delete(ctx, p); err != nil {
@@ -109,7 +100,7 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 				// need to be created again
 				if len(p.OwnerReferences) == 0 {
 					dbg.Info("Recreating pod")
-					sidecar.RemoveInstrumenter(p)
+					appo11yv1alpha1.RemoveInstrumenter(p)
 					p.ResourceVersion = ""
 					p.UID = ""
 					p.Status = corev1.PodStatus{}
@@ -128,8 +119,9 @@ func (r *InstrumenterReconciler) onDeletion(ctx context.Context, req ctrl.Reques
 }
 
 func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo11yv1alpha1.Instrumenter) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("onCreateUpdate", "name", instr.Name, "namespace", instr.Namespace)
+	logger := log.FromContext(ctx, "name", instr.Name, "namespace", instr.Namespace)
+	dbg := logger.V(lvl.Debug)
+	dbg.Info("onCreateUpdate", "spec", instr.Spec)
 
 	podList := corev1.PodList{}
 	if err := r.List(ctx, &podList,
@@ -138,29 +130,25 @@ func (r *InstrumenterReconciler) onCreateUpdate(ctx context.Context, instr *appo
 		return ctrl.Result{}, fmt.Errorf("reading pods: %w", err)
 	}
 
-	logger.V(lvl.Debug).Info("list of pods to instrument", "len", len(podList.Items))
+	dbg.Info("list of pods to instrument", "len", len(podList.Items))
 
-	iq := sidecar.InstrumentQuery{
-		InstrumenterName: instr.Name,
-		PortLabel:        instr.Spec.Selector.PortLabel,
-	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		podLog := logger.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
-		podLog.V(lvl.Debug).Info("checking if Pod needs to be instrumented")
-		if sidec, ok := sidecar.NeedsInstrumentation(iq, pod); ok {
-			podLog.V(lvl.Debug).Info("Destroying Pod to recreate it with an instrumenter sidecar")
+		podLog := dbg.WithValues("podName", pod.Name, "podNamespace", pod.Namespace)
+		podLog.Info("checking if Pod needs to be instrumented")
+		if sidec, ok := appo11yv1alpha1.NeedsInstrumentation(instr, pod); ok {
+			podLog.Info("Destroying Pod to recreate it with an instrumenter sidecar")
 			if err := r.Delete(ctx, pod); err != nil {
 				return ctrl.Result{}, fmt.Errorf("deleting Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 			}
 			// Pods belonging to a Service or ReplicaSet will be recreated automatically. Simple Pods
 			// need to be explicitly recreated
 			if len(pod.OwnerReferences) == 0 {
-				podLog.V(lvl.Debug).Info("Recreating pod")
+				podLog.Info("Recreating pod")
 				pod.ResourceVersion = ""
 				pod.UID = ""
 				pod.Status = corev1.PodStatus{}
-				sidecar.AddInstrumenter(iq.InstrumenterName, sidec, pod)
+				appo11yv1alpha1.AddInstrumenter(instr.Name, sidec, pod)
 				if err := r.Create(ctx, pod); err != nil {
 					return ctrl.Result{}, fmt.Errorf("can't recreate Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 				}
