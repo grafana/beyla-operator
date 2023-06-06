@@ -280,5 +280,11 @@ kind-load: ## Loads the built image into local Kind cluster
 
 .PHONY: install-cert-manager
 install-cert-manager: ## Installs cert-manager for webhook certificates management
-	kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
+	kubectl apply --validate=false -f test-assets/cert-manager-crd.yaml
 
+.PHONY: install-prometheus
+install-prometheus: ## Installs a prometheus Pod Monitor instance for
+	kubectl apply -f test-assets/prometheus.yaml
+
+.PHONY: install-test-components
+install-test-components: install-cert-manager install-prometheus ## Installs all the components required for local testing

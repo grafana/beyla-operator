@@ -14,8 +14,8 @@ spec:
     portLabel: grafana.com/instrument-port
   prometheus:
     path: "/metrics"
-    port: "9102"
-    labels:
+    port: 9102
+    annotations:
       scrape: "prometheus.io/scrape"
       scheme: "prometheus.io/scheme"
       port: "prometheus.io/port"

@@ -80,7 +80,6 @@ func RemoveInstrumenter(dst *v1.Pod) {
 
 func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 	lbls := dst.ObjectMeta.Labels
-	log.Info("labels", "labels", lbls, "query", iq)
 
 	// TODO: extract this information from owner (daemonset, deployment, replicaset...)
 	svcName, svcNamespace := dst.Name, dst.Namespace
@@ -108,7 +107,7 @@ func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 		exporters[e] = struct{}{}
 	}
 	if _, ok := exporters[ExporterPrometheus]; ok {
-		configurePrometheusExporter(svcName, iq, sidecar)
+		configurePrometheusExporter(svcName, iq, dst, sidecar)
 	}
 	if _, ok := exporters[ExporterOTELMetrics]; ok {
 		log.Info("exporter " + ExporterOTELMetrics + " not yet available. Ignoring")
@@ -120,10 +119,20 @@ func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 	return sidecar
 }
 
-func configurePrometheusExporter(svcName string, iq *Instrumenter, sidecar *v1.Container) {
+func configurePrometheusExporter(svcName string, iq *Instrumenter, dst *v1.Pod, sidecar *v1.Container) {
+	portStr := strconv.Itoa(iq.Spec.Prometheus.Port)
+	path := "/metrics" // TODO: make configurable
+	if dst.Annotations == nil {
+		dst.Annotations = map[string]string{}
+	}
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Scrape] = "true"
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Port] = portStr
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Scheme] = "http" // TODO: make configurable
+	dst.Annotations[iq.Spec.Prometheus.Annotations.Path] = path
 	sidecar.Env = append(sidecar.Env,
 		v1.EnvVar{Name: "PROMETHEUS_SERVICE_NAME", Value: svcName},
-		v1.EnvVar{Name: "PROMETHEUS_PORT", Value: strconv.Itoa(iq.Spec.Prometheus.Port)},
+		v1.EnvVar{Name: "PROMETHEUS_PORT", Value: portStr},
+		v1.EnvVar{Name: "PROMETHEUS_PATH", Value: path},
 		// TODO: extra properties such as METRICS_REPORT_TARGET and METRICS_REPORT_PEER
 	)
 }

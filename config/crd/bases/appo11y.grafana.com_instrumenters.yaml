@@ -53,7 +53,7 @@ spec:
                 description: Prometheus allows configuring the autoinstrumenter as
                   a Prometheus pull exporter.
                 properties:
-                  labels:
+                  annotations:
                     default:
                       scrape: prometheus.io/scrape
                     properties:

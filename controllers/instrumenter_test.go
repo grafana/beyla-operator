@@ -249,12 +249,29 @@ func assertPod(pod *v1.Pod) error {
 	if instrum.Image != "grafana/ebpf-autoinstrument:latest" {
 		return fmt.Errorf("invalid name: %s", instrum.Name)
 	}
-	found := false
-	for _, e := range instrum.Env {
-		found = found || e == v1.EnvVar{Name: "OPEN_PORT", Value: "8080"}
+	if pod.Spec.ShareProcessNamespace == nil || *pod.Spec.ShareProcessNamespace != true {
+		return fmt.Errorf("expecting ShareProcessNamespace=true. Got %v", pod.Spec.ShareProcessNamespace)
 	}
-	if !found {
-		return fmt.Errorf("expecting env %v to contain OPEN_PORT=8080", instrum.Env)
+	return assertEnvContains(instrum.Env, map[string]string{
+		"OPEN_PORT":               "8080",
+		"SERVICE_NAME":            "instrumentable-pod",
+		"SERVICE_NAMESPACE":       "default",
+		"PROMETHEUS_SERVICE_NAME": "instrumentable-pod",
+		"PROMETHEUS_PORT":         "9102",
+		"PROMETHEUS_PATH":         "/metrics",
+	})
+}
+
+func assertEnvContains(slice []v1.EnvVar, values map[string]string) error {
+	env := map[string]string{}
+	for _, e := range slice {
+		env[e.Name] = e.Value
+	}
+	for k, v := range values {
+		if env[k] != v {
+			return fmt.Errorf("expecting env %v to contain %v=%v. Got: %v",
+				env, k, v, env[k])
+		}
 	}
 	return nil
 }

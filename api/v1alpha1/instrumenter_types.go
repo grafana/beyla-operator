@@ -66,10 +66,10 @@ type Prometheus struct {
 	Port int `json:"port,omitempty"`
 
 	// +kubebuilder:default:={scrape:"prometheus.io/scrape"}
-	Labels PrometheusLabels `json:"labels,omitempty"`
+	Annotations PrometheusAnnotations `json:"annotations,omitempty"`
 }
 
-type PrometheusLabels struct {
+type PrometheusAnnotations struct {
 	// +kubebuilder:default:="prometheus.io/scrape"
 	Scrape string `json:"scrape,omitempty"`
 
