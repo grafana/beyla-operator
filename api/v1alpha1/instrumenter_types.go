@@ -33,6 +33,16 @@ const (
 
 // InstrumenterSpec defines the desired state of Instrumenter
 type InstrumenterSpec struct {
+	// Image allows overriding the autoinstrumenter container image for development purposes
+	// +kubebuilder:validate:MinLength:=1
+	// +kubebuilder:default:="grafana/ebpf-autoinstrument:latest"
+	// TODO: make Image values optional and use relatedImages sections in bundle
+	Image string `json:"image,omitempty"`
+
+	// ImagePullPolicy allows overriding the container pull policy for development purposes
+	// +kubebuilder:default:="IfNotPresent"
+	ImagePullPolicy v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// Exporters define the exporter endpoints that the autoinstrumenter must support
 	// +optional
 	// +kubebuilder:default:={"Prometheus"}

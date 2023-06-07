@@ -13,9 +13,7 @@ import (
 
 // TODO: user-overridable
 const (
-	instrumenterName            = "grafana-ebpf-autoinstrumenter"
-	instrumenterImage           = "grafana/ebpf-autoinstrument:latest"
-	instrumenterImagePullPolicy = "Always"
+	instrumenterName = "grafana-ebpf-autoinstrumenter"
 
 	InstrumentedLabel = "grafana.com/instrumented-by"
 
@@ -87,8 +85,8 @@ func buildSidecar(iq *Instrumenter, dst *v1.Pod) *v1.Container {
 	// TODO: do not make pod failing if sidecar fails, just report it in the Instrumenter status
 	sidecar := &v1.Container{
 		Name:            instrumenterName,
-		Image:           instrumenterImage,
-		ImagePullPolicy: instrumenterImagePullPolicy,
+		Image:           iq.Spec.Image,
+		ImagePullPolicy: iq.Spec.ImagePullPolicy,
 		// TODO: capabilities by default, or privileged only if user requests for it
 		SecurityContext: &v1.SecurityContext{
 			Privileged: helper.Ptr(true),

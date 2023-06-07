@@ -1,9 +1,28 @@
 # ebpf-autoinstrument-operator
 
-## TO DO
+## How to run (development purposes)
 
-* What happens if two instrumenters target the same set of pods? Avoid it
-* AddSidecar
-  * don't add it if it already exists with the actual data
-  * get service name from (in order): metadata label, owner name, pod label
-* If sidecar fails, do not make pod failing
+Run a fresh Kind cluster:
+
+```
+kind create cluster
+```
+
+Install prerequisites:
+
+```
+make install-cert-manager
+make install-prometheus # optional, if not using OTEL exporter
+```
+
+Rebuild and install the operator
+
+```
+export IMG=myuser/ebpf-autoinstrument-operator:dev
+make generate manifests docker-build kind-load deploy
+```
+
+To undeploy:
+```
+make undeploy
+```

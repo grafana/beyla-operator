@@ -47,6 +47,17 @@ spec:
                   - OpenTelemetryTraces
                   type: string
                 type: array
+              image:
+                default: grafana/ebpf-autoinstrument:latest
+                description: 'Image allows overriding the autoinstrumenter container
+                  image for development purposes TODO: make Image values optional
+                  and use relatedImages sections in bundle'
+                type: string
+              imagePullPolicy:
+                default: IfNotPresent
+                description: ImagePullPolicy allows overriding the container pull
+                  policy for development purposes
+                type: string
               openTelemetry:
                 default:
                   interval: 5s
