@@ -146,9 +146,9 @@ func configOpenTelemetry(metrics, traces bool, iq *Instrumenter, sidecar *v1.Con
 		sidecar.Env = append(sidecar.Env,
 			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: otel.Endpoint})
 	}
-	if otel.EndpointInsecure {
+	if otel.InsecureSkipVerify {
 		sidecar.Env = append(sidecar.Env,
-			v1.EnvVar{Name: "OTEL_EXPORTER_OTLP_INSECURE", Value: "true"})
+			v1.EnvVar{Name: "OTEL_INSECURE_SKIP_VERIFY", Value: "true"})
 	}
 	// TODO: this should be added automatically from the autoinstrumenter. Kept here for backwards-compatibility
 	sidecar.Env = append(sidecar.Env,

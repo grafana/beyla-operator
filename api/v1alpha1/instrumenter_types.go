@@ -100,9 +100,13 @@ type OpenTelemetry struct {
 	// +kubebuilder:validation:Pattern:="^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
 	Endpoint string `json:"endpoint,omitempty"`
 
-	// EndpointInsecure set to true will skip verification of TLS certificates.
+	// InsecureSkipVerify controls whether the instrumenter OTEL client verifies the server's
+	// certificate chain and host name.
+	// If set to `true`, the OTEL client accepts any certificate presented by the server
+	// and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+	// attacks. This option should be used only for testing and development purposes.
 	// +kubebuilder:default:=false
-	EndpointInsecure bool `json:"endpointInsecure,omitempty"`
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 
 	// Interval is the intervening time between metrics exports
 	// +kubebuilder:default:="5s"

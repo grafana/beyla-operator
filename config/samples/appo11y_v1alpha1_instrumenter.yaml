@@ -22,7 +22,7 @@ spec:
       path: "prometheus.io/path"
   openTelemetry:
     endpoint: ""
-    endpointInsecure: false
+    insecureSkipVerify: false
     interval: 5s
   overrideEnv:
     - name: PRINT_TRACES
