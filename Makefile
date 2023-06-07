@@ -283,7 +283,7 @@ install-cert-manager: ## Installs cert-manager for webhook certificates manageme
 	kubectl apply --validate=false -f test-assets/cert-manager-crd.yaml
 
 .PHONY: install-prometheus
-install-prometheus: ## Installs a prometheus Pod Monitor instance for
+install-prometheus: ## Installs a prometheus Pod Monitor instance
 	kubectl apply -f test-assets/prometheus.yaml
 
 .PHONY: install-test-components

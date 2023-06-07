@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,6 +33,16 @@ const (
 
 // InstrumenterSpec defines the desired state of Instrumenter
 type InstrumenterSpec struct {
+	// Image allows overriding the autoinstrumenter container image for development purposes
+	// +kubebuilder:validate:MinLength:=1
+	// +kubebuilder:default:="grafana/ebpf-autoinstrument:latest"
+	// TODO: make Image values optional and use relatedImages sections in bundle
+	Image string `json:"image,omitempty"`
+
+	// ImagePullPolicy allows overriding the container pull policy for development purposes
+	// +kubebuilder:default:="IfNotPresent"
+	ImagePullPolicy v1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// Exporters define the exporter endpoints that the autoinstrumenter must support
 	// +optional
 	// +kubebuilder:default:={"Prometheus"}
@@ -43,7 +54,17 @@ type InstrumenterSpec struct {
 
 	// Prometheus allows configuring the autoinstrumenter as a Prometheus pull exporter.
 	// +kubebuilder:default:={path:"/metrics"}
-	Prometheus Prometheus `json:"prometheus"`
+	Prometheus Prometheus `json:"prometheus,omitempty"`
+
+	// OpenTelemetry allows configuring the autoinstrumenter as an OpenTelemetry metrics
+	// and traces exporter
+	// +kubebuilder:default:={interval:"5s"}
+	OpenTelemetry OpenTelemetry `json:"openTelemetry,omitempty"`
+
+	// OverrideEnv allows overriding the autoinstrumenter env vars for fine-grained
+	// configuration
+	// +optional
+	OverrideEnv []v1.EnvVar `json:"overrideEnv,omitempty"`
 }
 
 // Selector allows selecting the Pod and executable to autoinstrument
@@ -81,6 +102,25 @@ type PrometheusAnnotations struct {
 
 	// +kubebuilder:default:="prometheus.io/path"
 	Path string `json:"path,omitempty"`
+}
+
+type OpenTelemetry struct {
+	// Endpoint of the OpenTelemetry collector
+	// +optional
+	// +kubebuilder:validation:Pattern:="^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// InsecureSkipVerify controls whether the instrumenter OTEL client verifies the server's
+	// certificate chain and host name.
+	// If set to `true`, the OTEL client accepts any certificate presented by the server
+	// and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+	// attacks. This option should be used only for testing and development purposes.
+	// +kubebuilder:default:=false
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+
+	// Interval is the intervening time between metrics exports
+	// +kubebuilder:default:="5s"
+	Interval metav1.Duration `json:"interval,omitempty"`
 }
 
 // InstrumenterStatus defines the observed state of Instrumenter
