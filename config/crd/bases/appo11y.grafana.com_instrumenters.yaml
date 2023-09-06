@@ -65,8 +65,8 @@ spec:
                   as an OpenTelemetry metrics and traces exporter
                 properties:
                   endpoint:
-                    description: Endpoint of the OpenTelemetry collector
-                    pattern: ^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$
+                    description: 'Endpoint of the OpenTelemetry collector TODO: properly
+                      validate URL (or empty value)'
                     type: string
                   insecureSkipVerify:
                     default: false

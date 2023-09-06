@@ -1,0 +1,104 @@
+# The autoinstrumenter is configured to expose the metrics as prometheus
+# The Grafana Agent is also deployed to submit the information to Grafana Cloud
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+type: Opaque
+stringData:
+  mimir-endpoint: "prometheus-<region>.grafana.net"
+  mimir-user: "<mimir user>"
+  grafana-api-key: "<grafana api key>"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-agent-config
+data:
+  agent-config.river: |
+    prometheus.scrape "default" {
+      targets = [{"__address__" = "localhost:12345"}]
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }    
+   
+    prometheus.remote_write "mimir" {
+      endpoint {
+        url = "https://" + env("MIMIR_USER") + ":" + env("GRAFANA_API_KEY") + "@" + env("MIMIR_ENDPOINT") + "/api/prom/push"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-agent
+  labels:
+    app: grafana-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-agent
+  template:
+    metadata:
+      labels:
+        app: grafana-agent
+    spec:
+      volumes:
+        - name: grafana-agent-config
+          configMap:
+            name: grafana-agent-config
+      containers:
+        - name: grafana-agent
+          image: grafana/agent:main
+          command:
+            - "/usr/bin/grafana-agent"
+            - "run"
+            - "/grafana-agent-config/agent-config.river"
+          env:
+            - name: AGENT_MODE
+              value: flow
+            - name: TEMPO_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  key: tempo-endpoint
+                  name: grafana-secret
+            - name: TEMPO_USER
+              valueFrom:
+                secretKeyRef:
+                  key: tempo-user
+                  name: grafana-secret
+            - name: MIMIR_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  key: mimir-endpoint
+                  name: grafana-secret
+            - name: MIMIR_USER
+              valueFrom:
+                secretKeyRef:
+                  key: mimir-user
+                  name: grafana-secret
+            - name: GRAFANA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: grafana-api-key
+                  name: grafana-secret
+          ports:
+            - containerPort: 4318
+              protocol: TCP
+              name: http-traces
+          volumeMounts:
+            - mountPath: /grafana-agent-config
+              readOnly: true
+              name: grafana-agent-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-agent
+spec:
+  selector:
+    app: grafana-agent
+  ports:
+    - port: 4318
+      protocol: TCP
+      targetPort: http-traces

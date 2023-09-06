@@ -16,7 +16,7 @@ spec:
     metadata:
       labels:
         app: goblog
-        grafana.com/instrument-port: "8080"
+        grafana.com/instrument-port: "8443"
     spec:
       # required so the sidecar instrumenter can access the service process
       containers:
