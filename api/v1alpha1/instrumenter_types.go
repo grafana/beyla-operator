@@ -107,7 +107,7 @@ type PrometheusAnnotations struct {
 type OpenTelemetry struct {
 	// Endpoint of the OpenTelemetry collector
 	// +optional
-	// +kubebuilder:validation:Pattern:="^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
+	// TODO: properly validate URL (or empty value)
 	Endpoint string `json:"endpoint,omitempty"`
 
 	// InsecureSkipVerify controls whether the instrumenter OTEL client verifies the server's
